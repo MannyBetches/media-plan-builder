@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Betches Media Plan Builder</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    background: #ffffff;
+    color: #111111;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+  .steps { display: flex; gap: 8px; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .step-dot {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; border: 1px solid #ddd; color: #aaa;
+  }
+  .step-dot.active { background: #F59ED8; border-color: #F59ED8; color: #4B1528; }
+  .step-label { font-size: 13px; color: #aaa; }
+  .step-label.active { color: #111; font-weight: 600; }
+  .step-sep { color: #ccc; font-size: 12px; margin: 0 2px; }
+  textarea {
+    width: 100%; min-height: 180px; font-size: 12px; font-family: monospace;
+    padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; resize: vertical;
+    color: #111;
+  }
+  button {
+    font-family: inherit; font-size: 13px; border-radius: 8px; cursor: pointer;
+    padding: 9px 18px; border: none;
+  }
+  button.primary { background: #F59ED8; color: #4B1528; font-weight: 700; }
+  button.secondary { background: #fff; color: #555; border: 1px solid #ccc; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .err {
+    margin-top: 10px; font-size: 12px; color: #a94442;
+    background: #fdecea; padding: 8px 12px; border-radius: 8px;
+  }
+  .group-card {
+    padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px;
+    cursor: pointer; margin-bottom: 6px; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .group-card.on { border-color: #F59ED8; background: #fff; }
+  .group-card.off { opacity: .55; background: #fafafa; }
+  .group-card.empty { opacity: .35; cursor: default; }
+  .checkbox {
+    margin-top: 1px; width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
+    border: 1.5px solid #ccc; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #4B1528; font-weight: 700;
+  }
+  .checkbox.on { border-color: #F59ED8; background: #F59ED8; }
+  .group-name { font-size: 13px; font-weight: 600; color: #111; }
+  .group-meta { font-size: 11px; color: #888; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    background: #F59ED8; color: #4B1528; padding: 8px 10px; text-align: left;
+    font-weight: 700; font-size: 11px; white-space: nowrap; text-decoration: underline;
+  }
+  td { padding: 8px 10px; vertical-align: top; border-bottom: 1px solid #eee; }
+  .plan-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
+  }
+  .plan-title { font-size: 15px; font-weight: 700; }
+  .plan-meta { font-size: 12px; color: #888; margin-top: 2px; }
+  .desc-line { line-height: 1.65; font-size: 11px; }
+  .table-wrap { border: 1px solid #eee; border-radius: 8px; overflow: auto; }
+  .total-row { background: #f7f7f7; font-weight: 700; }
+  footer { margin-top: 2rem; font-size: 11px; color: #bbb; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script>
+const { useState } = React;
+
+// ---------- CSV / TSV parsing ----------
+function splitLine(line, delim) {
+  const row = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; continue; }
+      inQ = !inQ; continue;
+    }
+    if (c === delim && !inQ) { row.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  row.push(cur);
+  return row.map(s => s.trim());
+}
+
+function parseNum(s) {
+  if (!s) return null;
+  const n = parseFloat(s.replace(/[",$]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+function parseExport(text) {
+  const lines = text.split(/\r?\n/);
+  const delim = text.includes('\t') ? '\t' : ',';
+  const rows = lines.map(l => splitLine(l, delim));
+  const meta = { date: '', agency: '', advertiser: '', partnerName: '', sellerName: '', email: '' };
+
+  let hdrRow = -1, hdrCol = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const j = rows[i].findIndex(c => c === 'Campaign Package');
+    if (j >= 0) { hdrRow = i; hdrCol = j; break; }
+  }
+  if (hdrRow < 0) return { meta, groups: [], debug: 'Header row "Campaign Package" not found' };
+  const descCol = hdrCol + 1, startCol = hdrCol + 2, endCol = hdrCol + 3, impCol = hdrCol + 4, totCol = hdrCol + 5;
+
+  for (let i = 0; i < hdrRow; i++) {
+    const r = rows[i];
+    for (let j = 0; j < r.length; j++) {
+      const v = r[j], next = (r[j + 1] || '').trim();
+      if (v === 'Date' && next) meta.date = next;
+      if (/^Agency Name:?\s*$/.test(v) && next) meta.agency = next;
+      if (/^Advertiser:?\s*$/.test(v) && next) meta.advertiser = next;
+      if (/^Partner Name:?\s*$/.test(v) && next) meta.partnerName = next;
+      if (/^Seller Name:?\s*$/.test(v) && next) meta.sellerName = next;
+      if (/^Email Address:?\s*$/.test(v) && next) meta.email = next;
+    }
+  }
+
+  const entries = [];
+  for (let i = hdrRow + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const get = j => (r[j] || '').trim();
+    let name = '';
+    for (let j = 0; j <= hdrCol; j++) { if (get(j)) { name = get(j); break; } }
+    if (name === 'Total') break;
+    if (!name && !get(descCol)) continue;
+    const start = get(startCol), end = get(endCol);
+    const imp = parseNum(get(impCol)), bud = parseNum(get(totCol));
+    if (name && !start && imp === null) {
+      entries.push({ kind: 'GROUP', name });
+    } else if (name && start) {
+      entries.push({ kind: 'ITEM', name, desc: get(descCol) || name, start, end, imp: imp || 0, bud: bud || 0 });
+    }
+  }
+
+  // Group into top-level Boostr groups. Within each group, detect nested templates:
+  // a row only counts as a template if BOTH (a) its own description bundles multiple
+  // sub-items (contains "+", like "Always On Meme Package: (1) X + (1) Y + Targeted
+  // Amplification"), AND (b) the following 2+ rows sum exactly to its own numbers.
+  // Requiring the "+" bundle signal prevents false positives where unrelated standalone
+  // items coincidentally add up to the same total as another standalone item (this was
+  // a real bug: "Hero video" $200k was wrongly absorbed as a template because two other
+  // unrelated videos happened to sum to $200k too, even though neither is a sub-part of it).
+  const MIN_CHILDREN = 2;
+  const looksLikeBundle = desc => desc.includes('+');
+  const groups = [];
+  let cur = null, i = 0;
+  while (i < entries.length) {
+    const e = entries[i];
+    if (e.kind === 'GROUP') {
+      cur = { name: e.name, units: [] };
+      groups.push(cur);
+      i++;
+      continue;
+    }
+    let matchedEnd = -1;
+    if (looksLikeBundle(e.desc)) {
+      let j = i + 1, sumImp = 0, sumBud = 0;
+      while (j < entries.length && entries[j].kind === 'ITEM') {
+        sumImp += entries[j].imp; sumBud += entries[j].bud;
+        const nchild = j - i;
+        if (nchild >= MIN_CHILDREN && Math.abs(sumImp - e.imp) < 0.5 && Math.abs(sumBud - e.bud) < 0.5) {
+          matchedEnd = j; break;
+        }
+        if (sumBud > e.bud + 0.5 && sumImp > e.imp + 0.5) break;
+        j++;
+      }
+    }
+    if (matchedEnd >= 0) {
+      cur.units.push({ type: 'TEMPLATE', desc: e.desc, imp: e.imp, bud: e.bud, start: e.start, end: e.end });
+      i = matchedEnd + 1;
+    } else {
+      cur.units.push({ type: 'STANDALONE', desc: e.desc, imp: e.imp, bud: e.bud, start: e.start, end: e.end });
+      i++;
+    }
+  }
+  return { meta, groups };
+}
+
+function consolidateUnits(units) {
+  const counts = {}; const order = [];
+  for (const u of units) {
+    const clean = u.desc.replace(/\s*Copy\s*\d+\s*$/i, '').trim();
+    const key = u.type + '|' + clean;
+    if (!counts[key]) { counts[key] = { type: u.type, desc: clean, n: 0 }; order.push(key); }
+    counts[key].n += 1;
+  }
+  return order.map(k => counts[k]);
+}
+
+const fmt = n => Number(n).toLocaleString('en-US');
+const fmtD = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function App() {
+  const [step, setStep] = useState('paste');
+  const [csv, setCsv] = useState('');
+  const [parsed, setParsed] = useState(null);
+  const [sel, setSel] = useState({});
+  const [plan, setPlan] = useState(null);
+  const [err, setErr] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const doParse = () => {
+    try {
+      const r = parseExport(csv);
+      if (!r.groups.length) { setErr(r.debug || 'No groups found. Paste the whole export including the Campaign Package header row.'); return; }
+      const s = {}; r.groups.forEach(g => { s[g.name] = g.units.length > 0; });
+      setParsed(r); setSel(s); setStep('select'); setErr('');
+    } catch (e) { setErr('Parse error: ' + e.message); }
+  };
+
+  const doGenerate = () => {
+    const rows = parsed.groups.filter(g => sel[g.name]).map(g => {
+      const totalImp = g.units.reduce((s, u) => s + u.imp, 0);
+      const totalBud = g.units.reduce((s, u) => s + u.bud, 0);
+      const starts = g.units.map(u => u.start).filter(Boolean);
+      const ends = g.units.map(u => u.end).filter(Boolean);
+      const consolidated = consolidateUnits(g.units);
+      const descLines = consolidated.map(c => (c.n > 1 ? c.n + 'x ' : '1x ') + c.desc);
+      return {
+        name: g.name, description: descLines.join('\n'),
+        totalImp, totalBud, start: starts[0] || '', end: ends[ends.length - 1] || '',
+      };
+    });
+    setPlan({ meta: parsed.meta, rows });
+    setStep('plan');
+  };
+
+  const doCopy = () => {
+    if (!plan) return;
+    const totI = plan.rows.reduce((s, r) => s + r.totalImp, 0);
+    const totB = plan.rows.reduce((s, r) => s + r.totalBud, 0);
+    const lines = [
+      'Date\t' + plan.meta.date, '',
+      'Advertiser\t\t\t\tPartner',
+      'Agency Name:\t' + plan.meta.agency + '\t\tPartner Name:\t' + plan.meta.partnerName,
+      'Advertiser:\t' + plan.meta.advertiser + '\t\tSeller Name:\t' + plan.meta.sellerName,
+      '\t\t\t\tEmail Address:\t' + plan.meta.email, '',
+      ['Campaign Package', 'Description', 'Start Date', 'End Date', 'Impressions', 'Total'].join('\t'),
+      ...plan.rows.map(r => ['"' + r.name + '"', '"' + r.description.replace(/"/g, '""') + '"', r.start, r.end, r.totalImp === 0 ? 'NA' : fmt(r.totalImp), fmtD(r.totalBud)].join('\t')),
+      ['Total', '', '', '', fmt(totI), fmtD(totB)].join('\t'),
+    ];
+    navigator.clipboard.writeText(lines.join('\n')).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
+
+  const newExport = () => {
+    setCsv(''); setParsed(null); setSel({}); setPlan(null); setErr(''); setStep('paste');
+  };
+
+  const StepBar = () => {
+    const steps = [['paste', '1', 'Paste export'], ['select', '2', 'Select groups'], ['plan', '3', 'Review plan']];
+    return React.createElement('div', { className: 'steps' },
+      steps.map(([id, n, label], i) => React.createElement(React.Fragment, { key: id },
+        React.createElement('div', { className: 'row' },
+          React.createElement('div', { className: 'step-dot' + (step === id ? ' active' : '') }, n),
+          React.createElement('span', { className: 'step-label' + (step === id ? ' active' : '') }, label)
+        ),
+        i < steps.length - 1 && React.createElement('span', { className: 'step-sep' }, '›')
+      ))
+    );
+  };
+
+  if (step === 'paste') return React.createElement('div', null,
+    React.createElement(StepBar),
+    React.createElement('p', { className: 'sub', style: { marginBottom: 12 } },
+      'Paste the whole Boostr export (Ctrl+A, Ctrl+C from the sheet). Each Boostr group becomes one combined row in the client plan, with impressions and budget added up across everything inside it.'),
+    React.createElement('textarea', {
+      value: csv, onChange: e => setCsv(e.target.value),
+      placeholder: 'Paste the whole Boostr export here — include the Campaign Package header row'
+    }),
+    React.createElement('div', { style: { marginTop: 10 } },
+      React.createElement('button', { className: 'primary', onClick: doParse, disabled: !csv.trim() }, 'Parse export')
+    ),
+    err && React.createElement('div', { className: 'err' }, err)
+  );
+
+  if (step === 'select') return React.createElement('div', null,
+    React.createElement(StepBar),
+    React.createElement('p', { className: 'sub', style: { marginBottom: 12 } },
+      'Found ' + parsed.groups.length + ' groups for ' + (parsed.meta.advertiser || 'this campaign') + '. Each becomes one row with combined totals.'),
+    React.createElement('div', { style: { marginBottom: 14 } },
+      parsed.groups.map(g => {
+        const on = !!sel[g.name];
+        const empty = g.units.length === 0;
+        const totalImp = g.units.reduce((s, u) => s + u.imp, 0);
+        const totalBud = g.units.reduce((s, u) => s + u.bud, 0);
+        const nTemplates = g.units.filter(u => u.type === 'TEMPLATE').length;
+        const nStandalone = g.units.filter(u => u.type === 'STANDALONE').length;
+        return React.createElement('div', {
+          key: g.name,
+          className: 'group-card ' + (empty ? 'empty' : (on ? 'on' : 'off')),
+          onClick: () => !empty && setSel(s => ({ ...s, [g.name]: !s[g.name] }))
+        },
+          React.createElement('div', { className: 'checkbox' + (on ? ' on' : '') }, on ? '✓' : ''),
+          React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+            React.createElement('div', { className: 'group-name' }, g.name, empty && React.createElement('span', { style: { marginLeft: 6, fontSize: 11, color: '#bbb' } }, '(no line items)')),
+            !empty && React.createElement('div', { className: 'group-meta' },
+              fmt(totalImp) + ' imps · ' + fmtD(totalBud) + ' · ' + nStandalone + ' standalone + ' + nTemplates + ' bundled product' + (nTemplates === 1 ? '' : 's'))
+          )
+        );
+      })
+    ),
+    React.createElement('div', { className: 'row' },
+      React.createElement('button', { className: 'primary', onClick: doGenerate }, 'Generate plan (' + Object.values(sel).filter(Boolean).length + ')'),
+      React.createElement('button', { className: 'secondary', onClick: () => setStep('paste') }, 'Back')
+    )
+  );
+
+  if (step === 'plan' && plan) {
+    const totI = plan.rows.reduce((s, r) => s + r.totalImp, 0);
+    const totB = plan.rows.reduce((s, r) => s + r.totalBud, 0);
+    return React.createElement('div', null,
+      React.createElement(StepBar),
+      React.createElement('div', { className: 'plan-header' },
+        React.createElement('div', null,
+          React.createElement('div', { className: 'plan-title' }, (plan.meta.advertiser || 'Plan') + ' × ' + (plan.meta.partnerName || 'Betches Media')),
+          React.createElement('div', { className: 'plan-meta' }, plan.rows.length + ' packages · ' + fmtD(totB) + ' · ' + fmt(totI) + ' impressions')
+        ),
+        React.createElement('div', { className: 'row' },
+          React.createElement('button', { className: 'primary', onClick: doCopy }, copied ? 'Copied' : 'Copy for Sheets'),
+          React.createElement('button', { className: 'secondary', onClick: () => setStep('select') }, 'Edit selection'),
+          React.createElement('button', { className: 'secondary', onClick: newExport }, 'New export')
+        )
+      ),
+      React.createElement('div', { className: 'table-wrap' },
+        React.createElement('table', null,
+          React.createElement('thead', null,
+            React.createElement('tr', null,
+              ['Campaign Package', 'Description', 'Dates', 'Impressions', 'Total'].map(h =>
+                React.createElement('th', { key: h }, h))
+            )
+          ),
+          React.createElement('tbody', null,
+            plan.rows.map((r, i) => React.createElement('tr', { key: i },
+              React.createElement('td', { style: { fontWeight: 700, minWidth: 110 } }, r.name),
+              React.createElement('td', { style: { maxWidth: 320 } },
+                r.description.split('\n').map((line, j) => React.createElement('div', { key: j, className: 'desc-line' }, line))
+              ),
+              React.createElement('td', { style: { whiteSpace: 'nowrap', color: '#888', fontSize: 11 } }, r.start + ' –', React.createElement('br'), r.end),
+              React.createElement('td', { style: { textAlign: 'right', whiteSpace: 'nowrap' } }, r.totalImp === 0 ? 'NA' : fmt(r.totalImp)),
+              React.createElement('td', { style: { textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' } }, fmtD(r.totalBud))
+            )),
+            React.createElement('tr', { className: 'total-row' },
+              React.createElement('td', { colSpan: 3 }, 'Total'),
+              React.createElement('td', { style: { textAlign: 'right' } }, fmt(totI)),
+              React.createElement('td', { style: { textAlign: 'right' } }, fmtD(totB))
+            )
+          )
+        )
+      ),
+      React.createElement('footer', null, 'Betches Media Plan Builder — runs entirely in your browser, no data leaves your machine')
+    );
+  }
+  return null;
+}
+
+ReactDOM.render(React.createElement(App), document.getElementById('app'));
+</script>
+</body>
+</html>
