@@ -106,6 +106,32 @@ function parseNum(s) {
   return isNaN(n) ? null : n;
 }
 
+// Words/abbreviations that must stay fully uppercase when we sentence-case a
+// shouty field. Boostr salespeople sometimes type whole rows in all-caps, and
+// a blind sentence-case pass would otherwise turn "IG STORY" into "Ig story".
+// Add to this list if a real export surfaces another acronym getting mangled.
+const PRESERVE_ACRONYMS = [
+  'IG', 'FB', 'TT', 'YT', 'CTV', 'OLV', 'OOH', 'VOD', 'TV', 'URL',
+  'US', 'UK', 'ROI', 'CPM', 'CPC', 'CPA', 'KPI', 'UGC', 'VIP', 'PR', 'API',
+  'Q1', 'Q2', 'Q3', 'Q4',
+];
+const PRESERVE_RE = new RegExp('\\b(' + PRESERVE_ACRONYMS.join('|') + ')\\b', 'gi');
+
+// Only rewrite fields that are actually shouty (fully uppercase). Text that's
+// already reasonably cased (e.g. "Custom In-Feed Meme") is left untouched so
+// we don't flatten intentional capitalization.
+function isShouty(s) {
+  return /[A-Z]/.test(s) && s === s.toUpperCase() && s !== s.toLowerCase();
+}
+
+function toSentenceCase(s) {
+  if (!s || !isShouty(s)) return s;
+  let out = s.toLowerCase();
+  out = out.replace(/(^\s*[a-z])|([.!?]\s+[a-z])/g, m => m.toUpperCase());
+  out = out.replace(PRESERVE_RE, m => m.toUpperCase());
+  return out;
+}
+
 function parseExport(text) {
   const lines = text.split(/\r?\n/);
   const delim = text.includes('\t') ? '\t' : ',';
@@ -144,9 +170,9 @@ function parseExport(text) {
     const start = get(startCol), end = get(endCol);
     const imp = parseNum(get(impCol)), bud = parseNum(get(totCol));
     if (name && !start && imp === null) {
-      entries.push({ kind: 'GROUP', name });
+      entries.push({ kind: 'GROUP', name: toSentenceCase(name) });
     } else if (name && start) {
-      entries.push({ kind: 'ITEM', name, desc: get(descCol) || name, start, end, imp: imp || 0, bud: bud || 0 });
+      entries.push({ kind: 'ITEM', name, desc: toSentenceCase(get(descCol) || name), start, end, imp: imp || 0, bud: bud || 0 });
     }
   }
 

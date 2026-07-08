@@ -105,6 +105,17 @@ version was wrong in production.
    are fine — they're static JS libraries, not API calls). Don't add any
    fetch/XHR calls to a backend.
 
+10. **Sentence-casing only touches shouty fields, and preserves acronyms.**
+    Group names and line-item descriptions are run through `toSentenceCase()`,
+    but only when a field is fully uppercase (`isShouty()`) — text that's
+    already reasonably cased (e.g. "Custom In-Feed Meme") is left untouched so
+    we don't flatten intentional capitalization. Before lowering a shouty
+    field, known acronyms in `PRESERVE_ACRONYMS` (IG, CTV, OLV, TV, Q1–Q4,
+    etc.) are matched case-insensitively and forced back to uppercase, so
+    "IG STORY" becomes "IG story", not "Ig story". If a real export surfaces
+    another acronym getting lowercased, add it to `PRESERVE_ACRONYMS` rather
+    than disabling the whole feature.
+
 ## Reporting bugs or requesting changes
 
 This tool is maintained by pasting real Boostr export data and describing
