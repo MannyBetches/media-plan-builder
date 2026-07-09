@@ -249,6 +249,7 @@ function generatePlan(meta, groups, selectedNames) {
     .setBackground('#F59ED8')
     .setFontColor('#ffffff')
     .setFontWeight('bold');
+  sheet.getRange(firstDataRow, 1, rows.length, 1).setFontWeight('bold');
   sheet.getRange(firstDataRow, 2, rows.length, 1).setWrap(true);
   sheet.setColumnWidth(2, 420);
   sheet.autoResizeColumns(1, 1);
