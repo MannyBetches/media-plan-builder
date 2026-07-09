@@ -257,12 +257,14 @@ function generatePlan(meta, groups, selectedNames) {
     .setFontColor('#4B1528')
     .setFontWeight('bold');
 
-  // Date, Advertiser, and Partner section headers get merged across two
-  // columns and underlined, matching the reference template's style. Date's
-  // label and value are two separate boxes, same as Advertiser/Partner.
-  sheet.getRange(1 + TOP_OFFSET, 1, 1, 2).merge().setFontLine('underline');
+  // Date value and Partner get merged across two columns since C:D and E:F
+  // aren't oversized. Date's label and Advertiser stay single-column instead
+  // of merging into column B, which needs to stay wide for the package
+  // table's Description column below — merging into it would balloon these
+  // boxes to match that width, which is the bug this replaced.
+  sheet.getRange(1 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
   sheet.getRange(1 + TOP_OFFSET, 3, 1, 2).merge().setFontLine('underline');
-  sheet.getRange(3 + TOP_OFFSET, 1, 1, 2).merge().setFontLine('underline');
+  sheet.getRange(3 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
   sheet.getRange(1 + TOP_OFFSET, 5, 1, 2).merge().setFontLine('underline');
 
   sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
