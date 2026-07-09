@@ -205,8 +205,11 @@ function generatePlan(meta, groups, selectedNames) {
 
   if (!rows.length) throw new Error('No groups selected — check at least one group before generating.');
 
+  const totI = rows.reduce((s, r) => s + r.totalImp, 0);
+  const totB = rows.reduce((s, r) => s + r.totalBud, 0);
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const tabName = makeUniqueSheetName(ss, meta.advertiser || 'Plan');
+  const tabName = makeUniqueSheetName(ss, suggestTabName(meta, totB));
   const sheet = ss.insertSheet(tabName);
 
   const values = [];
@@ -237,8 +240,6 @@ function generatePlan(meta, groups, selectedNames) {
   const firstDataRow = headerRowIdx + 1;
   const lastDataRow = values.length;
 
-  const totI = rows.reduce((s, r) => s + r.totalImp, 0);
-  const totB = rows.reduce((s, r) => s + r.totalBud, 0);
   values.push(['Total', '', '', '', totI, totB]);
   const totalRowIdx = values.length;
 
@@ -340,6 +341,24 @@ function addTermsAndConditions(sheet, afterRow, borderColor) {
     .setBorder(true, true, true, true, true, true, borderColor, SpreadsheetApp.BorderStyle.SOLID);
 
   return headerRow + allRows.length - 1;
+}
+
+// Builds a suggested tab name from the export's own data: advertiser, the
+// selected groups' total budget, and the date. The budget is included
+// specifically so that re-running the same advertiser's export at a
+// different budget tier (a different subset of groups selected) produces a
+// distinguishable tab name instead of colliding on advertiser name alone —
+// makeUniqueSheetName's "(2)", "(3)" suffix is a fallback for genuine ties,
+// not the primary way plans get told apart.
+function suggestTabName(meta, totalBudget) {
+  const parts = [];
+  if (meta.advertiser) parts.push(meta.advertiser);
+  if (totalBudget > 0) parts.push('$' + Math.round(totalBudget / 1000) + 'K');
+  if (meta.date) parts.push(meta.date);
+  const name = parts.length ? parts.join(' – ') : 'Plan';
+  // Sheet tab names can't contain [ ] * ? : / \ — the date (e.g. "07/09/2026")
+  // would otherwise break insertSheet on the slashes.
+  return name.replace(/[[\]*?:/\\]/g, '-');
 }
 
 function makeUniqueSheetName(ss, base) {
