@@ -207,12 +207,12 @@ function generatePlan(meta, groups, selectedNames) {
   const sheet = ss.insertSheet(tabName);
 
   const values = [];
-  values.push(['Date', meta.date || '', '', '', '', '']);
+  values.push(['Date', meta.date || '', '', '', 'Partner', '']);
+  values.push(['', '', '', 'Partner Name:', meta.partnerName || '', '']);
+  values.push(['Advertiser', '', '', 'Seller Name:', meta.sellerName || '', '']);
+  values.push(['Agency Name:', meta.agency || '', '', 'Email Address:', meta.email || '', '']);
+  values.push(['Advertiser:', meta.advertiser || '', '', '', '', '']);
   values.push(['', '', '', '', '', '']);
-  values.push(['Advertiser', '', '', '', 'Partner', '']);
-  values.push(['Agency Name:', meta.agency || '', '', 'Partner Name:', meta.partnerName || '', '']);
-  values.push(['Advertiser:', meta.advertiser || '', '', 'Seller Name:', meta.sellerName || '', '']);
-  values.push(['', '', '', 'Email Address:', meta.email || '', '']);
   values.push(['', '', '', '', '', '']);
   values.push(['Campaign Package', 'Description', 'Start Date', 'End Date', 'Impressions', 'Total']);
   const headerRowIdx = values.length;
@@ -245,7 +245,7 @@ function generatePlan(meta, groups, selectedNames) {
   // Info-block labels (Date, Advertiser/Partner, Agency Name:, etc.) get the
   // same pink-background/white-text treatment as the table header, so they
   // read as a matching label style rather than plain text.
-  sheet.getRangeList(['A1', 'A3', 'E3', 'A4', 'D4', 'A5', 'D5', 'D6'])
+  sheet.getRangeList(['A1', 'E1', 'A3', 'D2', 'A4', 'D3', 'A5', 'D4'])
     .setBackground('#F59ED8')
     .setFontColor('#ffffff')
     .setFontWeight('bold');
@@ -262,7 +262,7 @@ function generatePlan(meta, groups, selectedNames) {
   // a spreadsheet grid.
   sheet.setHiddenGridlines(true);
   const BORDER_COLOR = '#d9d9d9';
-  sheet.getRange(1, 1, headerRowIdx - 2, 6)
+  sheet.getRange(1, 1, headerRowIdx - 3, 6)
     .setBorder(true, true, true, true, false, false, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
   sheet.getRange(headerRowIdx, 1, totalRowIdx - headerRowIdx + 1, 6)
     .setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
