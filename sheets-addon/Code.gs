@@ -266,8 +266,47 @@ function generatePlan(meta, groups, selectedNames) {
   sheet.getRange(headerRowIdx, 1, totalRowIdx - headerRowIdx + 1, 6)
     .setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
 
+  addTermsAndConditions(sheet, totalRowIdx, BORDER_COLOR);
+
   ss.setActiveSheet(sheet);
   return { tabName, rowCount: rows.length, totalImp: totI, totalBud: totB };
+}
+
+// Standard legal boilerplate appended to every generated plan tab. Edit this
+// list to change the wording — it's the same text on every import, not
+// derived from the Boostr export.
+const TERMS_AND_CONDITIONS = [
+  '*Custom elements 100% non-cancellable upon signature of contract',
+  '*All impressions and views are estimated only, not guaranteed and may include paid promotion on organic media (Age/Demo Only EX: F18-34)',
+  '*All custom concepts pending final approval from Betches x Client creative ideas provided for inspiration only and are subject to change',
+  '*Min spends apply: $75K min spend for content (Ex: Memes/IG Stories) on any vertical account',
+  '*Min spends apply: $150K min spend for any content (Ex: Memes/IG Stories) on Betches Main account',
+  '*Min spends apply: $250K min spend per custom video on any vertical',
+  '*Payment: Net 30 Days upon receipt of the invoice from Betches Media - upfront production may be required',
+];
+
+// Writes a "Terms and Conditions" block a couple rows below the package
+// table: a pink underlined header, then one full-width merged row per term
+// with a light-blue fill and border — same shape as the Betches template.
+function addTermsAndConditions(sheet, afterRow, borderColor) {
+  const GAP_ROWS = 2;
+  const headerRow = afterRow + GAP_ROWS + 1;
+  const allRows = ['Terms and Conditions', ...TERMS_AND_CONDITIONS];
+
+  sheet.getRange(headerRow, 1, allRows.length, 1).setValues(allRows.map(t => [t]));
+  for (let i = 0; i < allRows.length; i++) {
+    sheet.getRange(headerRow + i, 1, 1, 6).merge();
+  }
+
+  sheet.getRange(headerRow, 1, 1, 6)
+    .setFontWeight('bold')
+    .setFontLine('underline')
+    .setBackground('#F59ED8');
+  sheet.getRange(headerRow + 1, 1, TERMS_AND_CONDITIONS.length, 6)
+    .setBackground('#E8EEF9')
+    .setWrap(true);
+  sheet.getRange(headerRow, 1, allRows.length, 6)
+    .setBorder(true, true, true, true, true, true, borderColor, SpreadsheetApp.BorderStyle.SOLID);
 }
 
 function makeUniqueSheetName(ss, base) {
