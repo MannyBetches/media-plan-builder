@@ -287,8 +287,17 @@ function generatePlan(meta, groups, selectedNames) {
 
   sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
   sheet.getRange(firstDataRow + TOP_OFFSET, 2, rows.length, 1).setWrap(true);
-  const logoBlob = Utilities.newBlob(Utilities.base64Decode(LOGO_BASE64), 'image/png', 'betches-logo.png');
-  sheet.insertImage(logoBlob, 1, 1);
+  // insertImage has failed here with "The image could not be inserted" across
+  // multiple different encodings of the same verified-valid PNG, for reasons
+  // that aren't visible from outside the Apps Script execution log. Rather
+  // than let a cosmetic logo failure block the entire import, swallow it —
+  // see the README for how to get the real stack trace and re-enable this.
+  try {
+    const logoBlob = Utilities.newBlob(Utilities.base64Decode(LOGO_BASE64), 'image/png', 'betches-logo.png');
+    sheet.insertImage(logoBlob, 1, 1);
+  } catch (e) {
+    console.error('Logo insertion failed: ' + e.message);
+  }
   sheet.setColumnWidth(2, 420);
   sheet.autoResizeColumns(1, 1);
   sheet.autoResizeColumns(3, 4);
