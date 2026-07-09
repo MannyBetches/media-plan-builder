@@ -223,7 +223,7 @@ function generatePlan(meta, groups, selectedNames) {
   const sheet = ss.insertSheet(tabName);
 
   const values = [];
-  values.push(['Date', '', meta.date || '', 'Partner', '', '']);
+  values.push(['Date', meta.date || '', '', 'Partner', '', '']);
   values.push(['', '', '', 'Partner Name:', meta.partnerName || '', '']);
   values.push(['Advertiser', '', '', 'Seller Name:', meta.sellerName || '', '']);
   values.push(['Agency Name:', meta.agency || '', '', 'Email Address:', meta.email || '', '']);
@@ -270,21 +270,20 @@ function generatePlan(meta, groups, selectedNames) {
   // Only the three section headers (Date, Advertiser, Partner) get the pink
   // background — individual field labels (Agency Name:, Partner Name:, etc.)
   // stay plain, matching the reference template. (+TOP_OFFSET rows.)
-  sheet.getRangeList(['A7', 'C7', 'D7', 'A9'])
+  sheet.getRangeList(['A7', 'B7', 'D7', 'A9'])
     .setBackground('#F59ED8')
     .setFontColor('#4B1528')
     .setFontWeight('bold');
 
-  // Date value gets its own single cell (column C) — it must NOT be merged
-  // into C:D, because column D holds the "Partner" header merged as D:E.
-  // Merging both C:D and D:E overlaps on column D, which silently destroyed
-  // whichever merge ran second (this was the "date in the wrong cell" /
-  // missing "Partner" label bug). Date's label and Advertiser stay
-  // single-column instead of merging into column B, which needs to stay
-  // wide for the package table's Description column below — merging into
-  // it would balloon these boxes to match that width.
+  // Date value sits in B7, right next to the "Date" label — a single,
+  // unmerged cell. It ends up as wide as column B (420px, sized for the
+  // package table's Description column below), same tradeoff as Advertiser.
+  // It must NOT be merged into column D, since D:E is already the "Partner"
+  // header merge — overlapping merges on the same column silently destroy
+  // whichever one runs second (this was the earlier "date in the wrong
+  // cell" / missing "Partner" label bug).
   sheet.getRange(1 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
-  sheet.getRange(1 + TOP_OFFSET, 3, 1, 1).setFontLine('underline');
+  sheet.getRange(1 + TOP_OFFSET, 2, 1, 1).setFontLine('underline');
   sheet.getRange(3 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
   sheet.getRange(1 + TOP_OFFSET, 4, 1, 2).merge().setFontLine('underline');
 
