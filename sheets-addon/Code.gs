@@ -247,6 +247,17 @@ function generatePlan(meta, groups, selectedNames) {
   sheet.autoResizeColumns(3, 4);
   sheet.setFrozenRows(headerRowIdx);
 
+  // Hide the default gridlines sheet-wide, then draw a visible border only
+  // around the two blocks that actually have content — the info header and
+  // the package table — so blank areas read as clean white space instead of
+  // a spreadsheet grid.
+  sheet.setHiddenGridlines(true);
+  const BORDER_COLOR = '#d9d9d9';
+  sheet.getRange(1, 1, headerRowIdx - 2, 6)
+    .setBorder(true, true, true, true, false, false, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange(headerRowIdx, 1, totalRowIdx - headerRowIdx + 1, 6)
+    .setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+
   ss.setActiveSheet(sheet);
   return { tabName, rowCount: rows.length, totalImp: totI, totalBud: totB };
 }
