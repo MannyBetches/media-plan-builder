@@ -5,8 +5,11 @@
 // already found and fixed. Don't "simplify" this without checking the README.
 // ============================================================================
 
-// Betches pink wordmark, stored in the same Drive folder as this Sheet.
-const LOGO_FILE_ID = '1KWiGoy8FOI_CVL9V6dLYtTjw5jIPgpvf';
+// Betches pink wordmark (500x97 PNG, 8-color palette, ~1.8KB), embedded
+// directly rather than fetched from Drive at runtime — DriveApp.getFileById
+// is unreliable for files whose parent is a Shared Drive root, which this
+// Sheet's Drive folder is, and caused "image could not be inserted" errors.
+const LOGO_BASE64 = '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';
 
 function splitLine(line, delim) {
   const row = []; let cur = '', inQ = false;
@@ -277,7 +280,8 @@ function generatePlan(meta, groups, selectedNames) {
 
   sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
   sheet.getRange(firstDataRow + TOP_OFFSET, 2, rows.length, 1).setWrap(true);
-  sheet.insertImage(DriveApp.getFileById(LOGO_FILE_ID).getBlob(), 1, 1);
+  const logoBlob = Utilities.newBlob(Utilities.base64Decode(LOGO_BASE64), 'image/png', 'betches-logo.png');
+  sheet.insertImage(logoBlob, 1, 1);
   sheet.setColumnWidth(2, 420);
   sheet.autoResizeColumns(1, 1);
   sheet.autoResizeColumns(3, 4);
