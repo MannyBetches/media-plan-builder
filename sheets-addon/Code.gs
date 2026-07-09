@@ -287,12 +287,13 @@ function generatePlan(meta, groups, selectedNames) {
 
   sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
   sheet.getRange(firstDataRow + TOP_OFFSET, 2, rows.length, 1).setWrap(true);
-  // insertImage has failed here with "The image could not be inserted" across
-  // multiple different encodings of the same verified-valid PNG, for reasons
-  // that aren't visible from outside the Apps Script execution log. Rather
-  // than let a cosmetic logo failure block the entire import, swallow it —
-  // see the README for how to get the real stack trace and re-enable this.
+  // insertImage was throwing "The image could not be inserted" here — a known
+  // Apps Script quirk where the call fails if issued before the sheet's
+  // pending writes (all the setValues/merge/formatting above) have been
+  // flushed to the backend. Flushing first resolves it; kept in a try/catch
+  // as a safety net so a logo failure still can't block the whole import.
   try {
+    SpreadsheetApp.flush();
     const logoBlob = Utilities.newBlob(Utilities.base64Decode(LOGO_BASE64), 'image/png', 'betches-logo.png');
     sheet.insertImage(logoBlob, 1, 1);
   } catch (e) {
