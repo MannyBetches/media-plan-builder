@@ -1,0 +1,261 @@
+// ============================================================================
+// Parsing logic below is ported verbatim from index.html at the repo root.
+// Keep it in sync with that file's HARD RULES (see README.md) — the template
+// detection, sentence-casing, and dedup logic all encode real bugs that were
+// already found and fixed. Don't "simplify" this without checking the README.
+// ============================================================================
+
+function splitLine(line, delim) {
+  const row = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; continue; }
+      inQ = !inQ; continue;
+    }
+    if (c === delim && !inQ) { row.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  row.push(cur);
+  return row.map(s => s.trim());
+}
+
+function parseNum(s) {
+  if (!s) return null;
+  const n = parseFloat(s.replace(/[",$]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+// Words/abbreviations that must stay fully uppercase when we sentence-case a
+// shouty field. Boostr salespeople sometimes type whole rows in all-caps, and
+// a blind sentence-case pass would otherwise turn "IG STORY" into "Ig story".
+// Add to this list if a real export surfaces another acronym getting mangled.
+const PRESERVE_ACRONYMS = [
+  'IG', 'FB', 'TT', 'YT', 'CTV', 'OLV', 'OOH', 'VOD', 'TV', 'URL',
+  'US', 'UK', 'ROI', 'CPM', 'CPC', 'CPA', 'KPI', 'UGC', 'VIP', 'PR', 'API',
+  'Q1', 'Q2', 'Q3', 'Q4',
+];
+const PRESERVE_RE = new RegExp('\\b(' + PRESERVE_ACRONYMS.join('|') + ')\\b', 'gi');
+
+// Only rewrite fields that are actually shouty (fully uppercase). Text that's
+// already reasonably cased (e.g. "Custom In-Feed Meme") is left untouched so
+// we don't flatten intentional capitalization.
+function isShouty(s) {
+  return /[A-Z]/.test(s) && s === s.toUpperCase() && s !== s.toLowerCase();
+}
+
+function toSentenceCase(s) {
+  if (!s || !isShouty(s)) return s;
+  let out = s.toLowerCase();
+  out = out.replace(/(^\s*[a-z])|([.!?]\s+[a-z])/g, m => m.toUpperCase());
+  out = out.replace(PRESERVE_RE, m => m.toUpperCase());
+  return out;
+}
+
+function parseExport(text) {
+  const lines = text.split(/\r?\n/);
+  const delim = text.includes('\t') ? '\t' : ',';
+  const rows = lines.map(l => splitLine(l, delim));
+  const meta = { date: '', agency: '', advertiser: '', partnerName: '', sellerName: '', email: '' };
+
+  let hdrRow = -1, hdrCol = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const j = rows[i].findIndex(c => c === 'Campaign Package');
+    if (j >= 0) { hdrRow = i; hdrCol = j; break; }
+  }
+  if (hdrRow < 0) return { meta, groups: [], debug: 'Header row "Campaign Package" not found' };
+  const descCol = hdrCol + 1, startCol = hdrCol + 2, endCol = hdrCol + 3, impCol = hdrCol + 4, totCol = hdrCol + 5;
+
+  for (let i = 0; i < hdrRow; i++) {
+    const r = rows[i];
+    for (let j = 0; j < r.length; j++) {
+      const v = r[j], next = (r[j + 1] || '').trim();
+      if (v === 'Date' && next) meta.date = next;
+      if (/^Agency Name:?\s*$/.test(v) && next) meta.agency = next;
+      if (/^Advertiser:?\s*$/.test(v) && next) meta.advertiser = next;
+      if (/^Partner Name:?\s*$/.test(v) && next) meta.partnerName = next;
+      if (/^Seller Name:?\s*$/.test(v) && next) meta.sellerName = next;
+      if (/^Email Address:?\s*$/.test(v) && next) meta.email = next;
+    }
+  }
+
+  const entries = [];
+  for (let i = hdrRow + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const get = j => (r[j] || '').trim();
+    let name = '';
+    for (let j = 0; j <= hdrCol; j++) { if (get(j)) { name = get(j); break; } }
+    if (name === 'Total') break;
+    if (!name && !get(descCol)) continue;
+    const start = get(startCol), end = get(endCol);
+    const imp = parseNum(get(impCol)), bud = parseNum(get(totCol));
+    if (name && !start && imp === null) {
+      entries.push({ kind: 'GROUP', name: toSentenceCase(name) });
+    } else if (name && start) {
+      entries.push({ kind: 'ITEM', name, desc: toSentenceCase(get(descCol) || name), start, end, imp: imp || 0, bud: bud || 0 });
+    }
+  }
+
+  // Group into top-level Boostr groups. Within each group, detect nested templates:
+  // a row only counts as a template if BOTH (a) its own description bundles multiple
+  // sub-items (contains "+", like "Always On Meme Package: (1) X + (1) Y + Targeted
+  // Amplification"), AND (b) the following 2+ rows sum exactly to its own numbers.
+  // Requiring the "+" bundle signal prevents false positives where unrelated standalone
+  // items coincidentally add up to the same total as another standalone item (this was
+  // a real bug: "Hero video" $200k was wrongly absorbed as a template because two other
+  // unrelated videos happened to sum to $200k too, even though neither is a sub-part of it).
+  const MIN_CHILDREN = 2;
+  const looksLikeBundle = desc => desc.includes('+');
+  const groups = [];
+  let cur = null, i = 0;
+  while (i < entries.length) {
+    const e = entries[i];
+    if (e.kind === 'GROUP') {
+      cur = { name: e.name, units: [] };
+      groups.push(cur);
+      i++;
+      continue;
+    }
+    let matchedEnd = -1;
+    if (looksLikeBundle(e.desc)) {
+      let j = i + 1, sumImp = 0, sumBud = 0;
+      while (j < entries.length && entries[j].kind === 'ITEM') {
+        sumImp += entries[j].imp; sumBud += entries[j].bud;
+        const nchild = j - i;
+        if (nchild >= MIN_CHILDREN && Math.abs(sumImp - e.imp) < 0.5 && Math.abs(sumBud - e.bud) < 0.5) {
+          matchedEnd = j; break;
+        }
+        if (sumBud > e.bud + 0.5 && sumImp > e.imp + 0.5) break;
+        j++;
+      }
+    }
+    if (matchedEnd >= 0) {
+      cur.units.push({ type: 'TEMPLATE', desc: e.desc, imp: e.imp, bud: e.bud, start: e.start, end: e.end });
+      i = matchedEnd + 1;
+    } else {
+      cur.units.push({ type: 'STANDALONE', desc: e.desc, imp: e.imp, bud: e.bud, start: e.start, end: e.end });
+      i++;
+    }
+  }
+  return { meta, groups };
+}
+
+function consolidateUnits(units) {
+  const counts = {}; const order = [];
+  for (const u of units) {
+    const clean = u.desc.replace(/\s*Copy\s*\d+\s*$/i, '').trim();
+    const key = u.type + '|' + clean;
+    if (!counts[key]) { counts[key] = { type: u.type, desc: clean, n: 0 }; order.push(key); }
+    counts[key].n += 1;
+  }
+  return order.map(k => counts[k]);
+}
+
+// ============================================================================
+// Sheet-specific wiring — menu, dialog, and writing the result into a tab.
+// ============================================================================
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Media Plan Importer')
+    .addItem('Import Boostr export…', 'showImportDialog')
+    .addToUi();
+}
+
+function showImportDialog() {
+  const html = HtmlService.createHtmlOutputFromFile('Dialog')
+    .setWidth(640)
+    .setHeight(560);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Import Boostr Export');
+}
+
+// Called from Dialog.html step 1. Throwing here surfaces as withFailureHandler
+// on the client, same as the web tool's inline parse error.
+function parseForReview(text) {
+  const result = parseExport(text);
+  if (!result.groups.length) {
+    throw new Error(result.debug || 'No groups found. Paste the whole export including the Campaign Package header row.');
+  }
+  return result;
+}
+
+// Called from Dialog.html step 2 with the same `meta`/`groups` parseForReview
+// returned, plus the list of group names the user left checked. Builds one
+// row per selected group (rule #5: standalone + template units summed, never
+// double-counting absorbed template children) and writes it into a new tab.
+function generatePlan(meta, groups, selectedNames) {
+  const selected = {};
+  selectedNames.forEach(n => { selected[n] = true; });
+
+  const rows = groups.filter(g => selected[g.name]).map(g => {
+    const totalImp = g.units.reduce((s, u) => s + u.imp, 0);
+    const totalBud = g.units.reduce((s, u) => s + u.bud, 0);
+    const starts = g.units.map(u => u.start).filter(Boolean);
+    const ends = g.units.map(u => u.end).filter(Boolean);
+    const consolidated = consolidateUnits(g.units);
+    const descLines = consolidated.map(c => (c.n > 1 ? c.n + 'x ' : '1x ') + c.desc);
+    return {
+      name: g.name, description: descLines.join('\n'),
+      totalImp, totalBud, start: starts[0] || '', end: ends[ends.length - 1] || '',
+    };
+  });
+
+  if (!rows.length) throw new Error('No groups selected — check at least one group before generating.');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tabName = makeUniqueSheetName(ss, meta.advertiser || 'Plan');
+  const sheet = ss.insertSheet(tabName);
+
+  const values = [];
+  values.push(['Date', meta.date || '', '', '', '', '']);
+  values.push(['', '', '', '', '', '']);
+  values.push(['Advertiser', '', '', '', 'Partner', '']);
+  values.push(['Agency Name:', meta.agency || '', '', 'Partner Name:', meta.partnerName || '', '']);
+  values.push(['Advertiser:', meta.advertiser || '', '', 'Seller Name:', meta.sellerName || '', '']);
+  values.push(['', '', '', 'Email Address:', meta.email || '', '']);
+  values.push(['', '', '', '', '', '']);
+  values.push(['Campaign Package', 'Description', 'Start Date', 'End Date', 'Impressions', 'Total']);
+  const headerRowIdx = values.length;
+
+  // A group whose only line items are flat-fee/sponsorship (no impression
+  // count) shows "NA" rather than 0, matching the web tool's copy-for-sheets
+  // output — mixing "NA" text with numeric impressions in the same column is
+  // intentional here, not an oversight.
+  rows.forEach(r => {
+    values.push([r.name, r.description, r.start, r.end, r.totalImp === 0 ? 'NA' : r.totalImp, r.totalBud]);
+  });
+  const firstDataRow = headerRowIdx + 1;
+  const lastDataRow = values.length;
+
+  const totI = rows.reduce((s, r) => s + r.totalImp, 0);
+  const totB = rows.reduce((s, r) => s + r.totalBud, 0);
+  values.push(['Total', '', '', '', totI, totB]);
+  const totalRowIdx = values.length;
+
+  sheet.getRange(1, 1, values.length, 6).setValues(values);
+
+  sheet.getRange(firstDataRow, 5, lastDataRow - firstDataRow + 1, 1).setNumberFormat('#,##0');
+  sheet.getRange(totalRowIdx, 5, 1, 1).setNumberFormat('#,##0');
+  sheet.getRange(firstDataRow, 6, lastDataRow - firstDataRow + 1, 1).setNumberFormat('$#,##0.00');
+  sheet.getRange(totalRowIdx, 6, 1, 1).setNumberFormat('$#,##0.00');
+
+  sheet.getRange(headerRowIdx, 1, 1, 6).setFontWeight('bold').setBackground('#F59ED8');
+  sheet.getRange(totalRowIdx, 1, 1, 6).setFontWeight('bold').setBackground('#f7f7f7');
+  sheet.getRange(firstDataRow, 2, rows.length, 1).setWrap(true);
+  sheet.setColumnWidth(2, 420);
+  sheet.autoResizeColumns(1, 1);
+  sheet.autoResizeColumns(3, 4);
+  sheet.setFrozenRows(headerRowIdx);
+
+  ss.setActiveSheet(sheet);
+  return { tabName, rowCount: rows.length, totalImp: totI, totalBud: totB };
+}
+
+function makeUniqueSheetName(ss, base) {
+  let name = base, n = 1;
+  while (ss.getSheetByName(name)) {
+    n += 1;
+    name = base + ' (' + n + ')';
+  }
+  return name;
+}

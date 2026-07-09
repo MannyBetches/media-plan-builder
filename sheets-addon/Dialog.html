@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #111;
+    margin: 0; padding: 16px;
+  }
+  p.sub { font-size: 12px; color: #888; margin: 0 0 12px; }
+  textarea {
+    width: 100%; min-height: 240px; font-size: 12px; font-family: monospace;
+    padding: 10px; border: 1px solid #ddd; border-radius: 8px; resize: vertical;
+  }
+  button {
+    font-family: inherit; font-size: 13px; border-radius: 8px; cursor: pointer;
+    padding: 9px 18px; border: none; margin-right: 8px;
+  }
+  button.primary { background: #F59ED8; color: #4B1528; font-weight: 700; }
+  button.secondary { background: #fff; color: #555; border: 1px solid #ccc; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .err {
+    margin-top: 10px; font-size: 12px; color: #a94442;
+    background: #fdecea; padding: 8px 12px; border-radius: 8px;
+  }
+  .group-row {
+    padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px;
+    cursor: pointer; margin-bottom: 6px;
+  }
+  .group-row.off { opacity: .55; background: #fafafa; }
+  .group-name { font-weight: 700; }
+  .group-meta { font-size: 11px; color: #888; margin-top: 2px; }
+  #status { margin-top: 12px; font-size: 12px; color: #555; }
+  #status.done { color: #1a7f37; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="step-paste">
+  <p class="sub">Paste the whole Boostr export, including the "Campaign Package" header row.</p>
+  <textarea id="csv" placeholder="Paste export here…"></textarea>
+  <div style="margin-top:10px;">
+    <button class="primary" id="parseBtn" onclick="doParse()">Parse export</button>
+  </div>
+  <div id="parseErr"></div>
+</div>
+
+<div id="step-select" style="display:none;">
+  <p class="sub" id="selectSummary"></p>
+  <div id="groupList"></div>
+  <div>
+    <button class="primary" id="genBtn" onclick="doGenerate()">Generate plan</button>
+    <button class="secondary" onclick="backToPaste()">Back</button>
+  </div>
+  <div id="status"></div>
+</div>
+
+<script>
+let parsed = null;
+let selected = {};
+
+function fmt(n) { return Number(n).toLocaleString('en-US'); }
+function fmtD(n) { return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+function doParse() {
+  const text = document.getElementById('csv').value;
+  document.getElementById('parseErr').innerHTML = '';
+  document.getElementById('parseBtn').disabled = true;
+  google.script.run
+    .withSuccessHandler(onParsed)
+    .withFailureHandler(onParseError)
+    .parseForReview(text);
+}
+
+function onParseError(err) {
+  document.getElementById('parseBtn').disabled = false;
+  document.getElementById('parseErr').innerHTML = '<div class="err">' + (err.message || err) + '</div>';
+}
+
+function onParsed(result) {
+  document.getElementById('parseBtn').disabled = false;
+  parsed = result;
+  selected = {};
+  parsed.groups.forEach(g => { selected[g.name] = g.units.length > 0; });
+  renderSelect();
+  document.getElementById('step-paste').style.display = 'none';
+  document.getElementById('step-select').style.display = 'block';
+}
+
+function renderSelect() {
+  document.getElementById('selectSummary').textContent =
+    'Found ' + parsed.groups.length + ' group(s) for ' + (parsed.meta.advertiser || 'this campaign') + '. Uncheck any you want to leave out.';
+  const list = document.getElementById('groupList');
+  list.innerHTML = '';
+  parsed.groups.forEach(g => {
+    const totalImp = g.units.reduce((s, u) => s + u.imp, 0);
+    const totalBud = g.units.reduce((s, u) => s + u.bud, 0);
+    const on = !!selected[g.name];
+    const div = document.createElement('div');
+    div.className = 'group-row' + (on ? '' : ' off');
+    div.innerHTML = '<div class="group-name">' + (on ? '☑' : '☐') + ' ' + g.name + '</div>' +
+      '<div class="group-meta">' + (totalImp === 0 ? 'NA' : fmt(totalImp)) + ' imps · ' + fmtD(totalBud) + '</div>';
+    div.onclick = () => { selected[g.name] = !selected[g.name]; renderSelect(); };
+    list.appendChild(div);
+  });
+}
+
+function backToPaste() {
+  document.getElementById('status').innerHTML = '';
+  document.getElementById('step-select').style.display = 'none';
+  document.getElementById('step-paste').style.display = 'block';
+}
+
+function doGenerate() {
+  const names = Object.keys(selected).filter(k => selected[k]);
+  if (!names.length) {
+    document.getElementById('status').innerHTML = '<div class="err">Check at least one group first.</div>';
+    return;
+  }
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('status').textContent = 'Writing to sheet…';
+  google.script.run
+    .withSuccessHandler(onGenerated)
+    .withFailureHandler(onGenError)
+    .generatePlan(parsed.meta, parsed.groups, names);
+}
+
+function onGenerated(result) {
+  const status = document.getElementById('status');
+  status.className = 'done';
+  status.textContent = 'Done — created tab "' + result.tabName + '" with ' + result.rowCount + ' package(s). Closing…';
+  document.getElementById('genBtn').disabled = false;
+  setTimeout(() => google.script.host.close(), 1400);
+}
+
+function onGenError(err) {
+  document.getElementById('genBtn').disabled = false;
+  document.getElementById('status').innerHTML = '<div class="err">' + (err.message || err) + '</div>';
+}
+</script>
+</body>
+</html>

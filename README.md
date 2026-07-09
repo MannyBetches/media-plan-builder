@@ -5,6 +5,11 @@ client-facing media plan you can paste into Google Sheets.
 
 **Live tool:** https://MannyBetches.github.io/media-plan-builder/
 
+There's also an in-progress [Google Sheets add-on](sheets-addon/) that imports
+a Boostr export directly into a sheet tab, no copy/paste needed — a separate,
+independent tool built on the same parsing logic. The website above is
+unaffected by it and keeps working as the primary tool in the meantime.
+
 ## What it does
 
 1. You paste a full Boostr export (copy the whole sheet, or export a CSV) into

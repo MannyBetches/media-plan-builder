@@ -1,0 +1,13 @@
+{
+  "name": "media-plan-importer-sheets-addon",
+  "private": true,
+  "description": "Apps Script bound to a Google Sheet — imports Boostr exports directly into a tab.",
+  "scripts": {
+    "login": "clasp login",
+    "push": "clasp push",
+    "open": "clasp open"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.3.0"
+  }
+}
