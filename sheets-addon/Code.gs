@@ -210,11 +210,18 @@ function generatePlan(meta, groups, selectedNames) {
   const sheet = ss.insertSheet(tabName);
 
   const values = [];
-  values.push(['Date', '', meta.date || '', '', 'Partner', '']);
+  values.push(['Date', '', meta.date || '', 'Partner', '', '']);
   values.push(['', '', '', 'Partner Name:', meta.partnerName || '', '']);
   values.push(['Advertiser', '', '', 'Seller Name:', meta.sellerName || '', '']);
   values.push(['Agency Name:', meta.agency || '', '', 'Email Address:', meta.email || '', '']);
   values.push(['Advertiser:', meta.advertiser || '', '', '', '', '']);
+  // Boostr doesn't provide these — blank on every import, for the team to
+  // fill in by hand, matching the fields in the reference template.
+  values.push(['Billing Contact:', '', '', '', '', '']);
+  values.push(['Phone:', '', '', '', '', '']);
+  values.push(['State:', '', '', '', '', '']);
+  values.push(['City:', '', '', '', '', '']);
+  values.push(['Zip:', '', '', '', '', '']);
   values.push(['', '', '', '', '', '']);
   values.push(['', '', '', '', '', '']);
   values.push(['Campaign Package', 'Description', 'Start Date', 'End Date', 'Impressions', 'Total']);
@@ -252,12 +259,12 @@ function generatePlan(meta, groups, selectedNames) {
   // Only the three section headers (Date, Advertiser, Partner) get the pink
   // background — individual field labels (Agency Name:, Partner Name:, etc.)
   // stay plain, matching the reference template. (+TOP_OFFSET rows.)
-  sheet.getRangeList(['A7', 'C7', 'E7', 'A9'])
+  sheet.getRangeList(['A7', 'C7', 'D7', 'A9'])
     .setBackground('#F59ED8')
     .setFontColor('#4B1528')
     .setFontWeight('bold');
 
-  // Date value and Partner get merged across two columns since C:D and E:F
+  // Date value and Partner get merged across two columns since C:D and D:E
   // aren't oversized. Date's label and Advertiser stay single-column instead
   // of merging into column B, which needs to stay wide for the package
   // table's Description column below — merging into it would balloon these
@@ -265,7 +272,7 @@ function generatePlan(meta, groups, selectedNames) {
   sheet.getRange(1 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
   sheet.getRange(1 + TOP_OFFSET, 3, 1, 2).merge().setFontLine('underline');
   sheet.getRange(3 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
-  sheet.getRange(1 + TOP_OFFSET, 5, 1, 2).merge().setFontLine('underline');
+  sheet.getRange(1 + TOP_OFFSET, 4, 1, 2).merge().setFontLine('underline');
 
   sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
   sheet.getRange(firstDataRow + TOP_OFFSET, 2, rows.length, 1).setWrap(true);
