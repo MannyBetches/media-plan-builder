@@ -275,34 +275,23 @@ function generatePlan(meta, groups, selectedNames) {
     .setFontColor('#4B1528')
     .setFontWeight('bold');
 
-  // Date value and Partner get merged across two columns since C:D and D:E
-  // aren't oversized. Date's label and Advertiser stay single-column instead
-  // of merging into column B, which needs to stay wide for the package
-  // table's Description column below — merging into it would balloon these
-  // boxes to match that width, which is the bug this replaced.
+  // Date value gets its own single cell (column C) — it must NOT be merged
+  // into C:D, because column D holds the "Partner" header merged as D:E.
+  // Merging both C:D and D:E overlaps on column D, which silently destroyed
+  // whichever merge ran second (this was the "date in the wrong cell" /
+  // missing "Partner" label bug). Date's label and Advertiser stay
+  // single-column instead of merging into column B, which needs to stay
+  // wide for the package table's Description column below — merging into
+  // it would balloon these boxes to match that width.
   sheet.getRange(1 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
-  sheet.getRange(1 + TOP_OFFSET, 3, 1, 2).merge().setFontLine('underline');
+  sheet.getRange(1 + TOP_OFFSET, 3, 1, 1).setFontLine('underline');
   sheet.getRange(3 + TOP_OFFSET, 1, 1, 1).setFontLine('underline');
   sheet.getRange(1 + TOP_OFFSET, 4, 1, 2).merge().setFontLine('underline');
 
   sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
-  sheet.getRange(firstDataRow + TOP_OFFSET, 2, rows.length, 1).setWrap(true);
-  // insertImage was throwing "The image could not be inserted" here — a known
-  // Apps Script quirk where the call fails if issued before the sheet's
-  // pending writes (all the setValues/merge/formatting above) have been
-  // flushed to the backend. Flushing first resolves it; kept in a try/catch
-  // as a safety net so a logo failure still can't block the whole import.
-  try {
-    SpreadsheetApp.flush();
-    const logoBlob = Utilities.newBlob(Utilities.base64Decode(LOGO_BASE64), 'image/png', 'betches-logo.png');
-    sheet.insertImage(logoBlob, 1, 1);
-  } catch (e) {
-    console.error('Logo insertion failed: ' + e.message);
-  }
   sheet.setColumnWidth(2, 420);
   sheet.autoResizeColumns(1, 1);
   sheet.autoResizeColumns(3, 4);
-  sheet.setFrozenRows(headerRowIdx + TOP_OFFSET);
 
   // Hide the default gridlines sheet-wide, then draw a visible border only
   // around the two blocks that actually have content — the info header and
@@ -317,7 +306,31 @@ function generatePlan(meta, groups, selectedNames) {
 
   const tcLastRow = addTermsAndConditions(sheet, totalRowIdx + TOP_OFFSET, BORDER_COLOR);
 
-  sheet.getRange(1 + TOP_OFFSET, 1, tcLastRow - TOP_OFFSET, 6).setVerticalAlignment('middle');
+  const usedRange = sheet.getRange(1 + TOP_OFFSET, 1, tcLastRow - TOP_OFFSET, 6);
+  usedRange.setVerticalAlignment('middle');
+  usedRange.setWrap(true);
+
+  // No frozen rows/columns — nothing should stay pinned while scrolling.
+  sheet.setFrozenRows(0);
+  sheet.setFrozenColumns(0);
+
+  // insertImage has repeatedly thrown "The image could not be inserted" here
+  // for reasons that don't surface in the Apps Script execution log even
+  // after fixing two confirmed real issues (an indexed/palette PNG format,
+  // and a truncated base64 string) — so at this point the image data itself
+  // is verified correct. Trying the insert last, after every other write and
+  // an explicit flush, in case it's timing-sensitive; still wrapped so a
+  // logo failure can never block the rest of the import. If this still
+  // fails, the logged blob size confirms whether the data reaching
+  // insertImage matches the ~11KB we expect.
+  try {
+    SpreadsheetApp.flush();
+    const logoBlob = Utilities.newBlob(Utilities.base64Decode(LOGO_BASE64), 'image/png', 'betches-logo.png');
+    console.log('Logo blob bytes: ' + logoBlob.getBytes().length);
+    sheet.insertImage(logoBlob, 1, 1);
+  } catch (e) {
+    console.error('Logo insertion failed: ' + e.message);
+  }
 
   ss.setActiveSheet(sheet);
   return { tabName, rowCount: rows.length, totalImp: totI, totalBud: totB };
