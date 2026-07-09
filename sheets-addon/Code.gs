@@ -232,29 +232,39 @@ function generatePlan(meta, groups, selectedNames) {
   values.push(['Total', '', '', '', totI, totB]);
   const totalRowIdx = values.length;
 
-  sheet.getRange(1, 1, values.length, 6).setValues(values);
+  // Rows 1-6 are left blank for the Betches logo; everything else shifts
+  // down by this amount.
+  const TOP_OFFSET = 6;
 
-  sheet.getRange(firstDataRow, 5, lastDataRow - firstDataRow + 1, 1).setNumberFormat('#,##0');
-  sheet.getRange(totalRowIdx, 5, 1, 1).setNumberFormat('#,##0');
-  sheet.getRange(firstDataRow, 6, lastDataRow - firstDataRow + 1, 1).setNumberFormat('$#,##0.00');
-  sheet.getRange(totalRowIdx, 6, 1, 1).setNumberFormat('$#,##0.00');
+  sheet.getRange(1 + TOP_OFFSET, 1, values.length, 6).setValues(values);
 
-  sheet.getRange(headerRowIdx, 1, 1, 6).setFontWeight('bold').setBackground('#F59ED8').setFontColor('#ffffff');
-  sheet.getRange(totalRowIdx, 1, 1, 6).setFontWeight('bold').setBackground('#f7f7f7');
+  sheet.getRange(firstDataRow + TOP_OFFSET, 5, lastDataRow - firstDataRow + 1, 1).setNumberFormat('#,##0');
+  sheet.getRange(totalRowIdx + TOP_OFFSET, 5, 1, 1).setNumberFormat('#,##0');
+  sheet.getRange(firstDataRow + TOP_OFFSET, 6, lastDataRow - firstDataRow + 1, 1).setNumberFormat('$#,##0.00');
+  sheet.getRange(totalRowIdx + TOP_OFFSET, 6, 1, 1).setNumberFormat('$#,##0.00');
+
+  sheet.getRange(headerRowIdx + TOP_OFFSET, 1, 1, 6).setFontWeight('bold').setBackground('#F59ED8').setFontColor('#ffffff');
+  sheet.getRange(totalRowIdx + TOP_OFFSET, 1, 1, 6).setFontWeight('bold').setBackground('#f7f7f7');
 
   // Info-block labels (Date, Advertiser/Partner, Agency Name:, etc.) get the
   // same pink-background/white-text treatment as the table header, so they
-  // read as a matching label style rather than plain text.
-  sheet.getRangeList(['A1', 'E1', 'A3', 'D2', 'A4', 'D3', 'A5', 'D4'])
+  // read as a matching label style rather than plain text. (+TOP_OFFSET rows.)
+  sheet.getRangeList(['A7', 'E7', 'A9', 'D8', 'A10', 'D9', 'A11', 'D10'])
     .setBackground('#F59ED8')
     .setFontColor('#ffffff')
     .setFontWeight('bold');
-  sheet.getRange(firstDataRow, 1, rows.length, 1).setFontWeight('bold');
-  sheet.getRange(firstDataRow, 2, rows.length, 1).setWrap(true);
+
+  // Advertiser and Partner section headers additionally get merged across
+  // two columns and underlined, matching the reference template's style.
+  sheet.getRange(3 + TOP_OFFSET, 1, 1, 2).merge().setFontLine('underline');
+  sheet.getRange(1 + TOP_OFFSET, 5, 1, 2).merge().setFontLine('underline');
+
+  sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
+  sheet.getRange(firstDataRow + TOP_OFFSET, 2, rows.length, 1).setWrap(true);
   sheet.setColumnWidth(2, 420);
   sheet.autoResizeColumns(1, 1);
   sheet.autoResizeColumns(3, 4);
-  sheet.setFrozenRows(headerRowIdx);
+  sheet.setFrozenRows(headerRowIdx + TOP_OFFSET);
 
   // Hide the default gridlines sheet-wide, then draw a visible border only
   // around the two blocks that actually have content — the info header and
@@ -262,14 +272,14 @@ function generatePlan(meta, groups, selectedNames) {
   // a spreadsheet grid.
   sheet.setHiddenGridlines(true);
   const BORDER_COLOR = '#d9d9d9';
-  sheet.getRange(1, 1, headerRowIdx - 3, 6)
+  sheet.getRange(1 + TOP_OFFSET, 1, headerRowIdx - 3, 6)
     .setBorder(true, true, true, true, false, false, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
-  sheet.getRange(headerRowIdx, 1, totalRowIdx - headerRowIdx + 1, 6)
+  sheet.getRange(headerRowIdx + TOP_OFFSET, 1, totalRowIdx - headerRowIdx + 1, 6)
     .setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
 
-  const tcLastRow = addTermsAndConditions(sheet, totalRowIdx, BORDER_COLOR);
+  const tcLastRow = addTermsAndConditions(sheet, totalRowIdx + TOP_OFFSET, BORDER_COLOR);
 
-  sheet.getRange(1, 1, tcLastRow, 6).setVerticalAlignment('middle');
+  sheet.getRange(1 + TOP_OFFSET, 1, tcLastRow - TOP_OFFSET, 6).setVerticalAlignment('middle');
 
   ss.setActiveSheet(sheet);
   return { tabName, rowCount: rows.length, totalImp: totI, totalBud: totB };
