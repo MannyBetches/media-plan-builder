@@ -267,7 +267,9 @@ function generatePlan(meta, groups, selectedNames) {
   sheet.getRange(headerRowIdx, 1, totalRowIdx - headerRowIdx + 1, 6)
     .setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
 
-  addTermsAndConditions(sheet, totalRowIdx, BORDER_COLOR);
+  const tcLastRow = addTermsAndConditions(sheet, totalRowIdx, BORDER_COLOR);
+
+  sheet.getRange(1, 1, tcLastRow, 6).setVerticalAlignment('middle');
 
   ss.setActiveSheet(sheet);
   return { tabName, rowCount: rows.length, totalImp: totI, totalBud: totB };
@@ -288,7 +290,9 @@ const TERMS_AND_CONDITIONS = [
 
 // Writes a "Terms and Conditions" block a couple rows below the package
 // table: a pink underlined header, then one full-width merged row per term
-// with a light-blue fill and border — same shape as the Betches template.
+// with a white fill and border — same shape as the Betches template. Returns
+// the last row number used, so the caller can extend formatting (e.g.
+// vertical alignment) to cover this block too.
 function addTermsAndConditions(sheet, afterRow, borderColor) {
   const GAP_ROWS = 2;
   const headerRow = afterRow + GAP_ROWS + 1;
@@ -304,10 +308,12 @@ function addTermsAndConditions(sheet, afterRow, borderColor) {
     .setFontLine('underline')
     .setBackground('#F59ED8');
   sheet.getRange(headerRow + 1, 1, TERMS_AND_CONDITIONS.length, 6)
-    .setBackground('#E8EEF9')
+    .setBackground('#ffffff')
     .setWrap(true);
   sheet.getRange(headerRow, 1, allRows.length, 6)
     .setBorder(true, true, true, true, true, true, borderColor, SpreadsheetApp.BorderStyle.SOLID);
+
+  return headerRow + allRows.length - 1;
 }
 
 function makeUniqueSheetName(ss, base) {
