@@ -239,8 +239,16 @@ function generatePlan(meta, groups, selectedNames) {
   sheet.getRange(firstDataRow, 6, lastDataRow - firstDataRow + 1, 1).setNumberFormat('$#,##0.00');
   sheet.getRange(totalRowIdx, 6, 1, 1).setNumberFormat('$#,##0.00');
 
-  sheet.getRange(headerRowIdx, 1, 1, 6).setFontWeight('bold').setBackground('#F59ED8');
+  sheet.getRange(headerRowIdx, 1, 1, 6).setFontWeight('bold').setBackground('#F59ED8').setFontColor('#ffffff');
   sheet.getRange(totalRowIdx, 1, 1, 6).setFontWeight('bold').setBackground('#f7f7f7');
+
+  // Info-block labels (Date, Advertiser/Partner, Agency Name:, etc.) get the
+  // same pink-background/white-text treatment as the table header, so they
+  // read as a matching label style rather than plain text.
+  sheet.getRangeList(['A1', 'A3', 'E3', 'A4', 'D4', 'A5', 'D5', 'D6'])
+    .setBackground('#F59ED8')
+    .setFontColor('#ffffff')
+    .setFontWeight('bold');
   sheet.getRange(firstDataRow, 2, rows.length, 1).setWrap(true);
   sheet.setColumnWidth(2, 420);
   sheet.autoResizeColumns(1, 1);
