@@ -5,6 +5,9 @@
 // already found and fixed. Don't "simplify" this without checking the README.
 // ============================================================================
 
+// Betches pink wordmark, stored in the same Drive folder as this Sheet.
+const LOGO_FILE_ID = '1KWiGoy8FOI_CVL9V6dLYtTjw5jIPgpvf';
+
 function splitLine(line, delim) {
   const row = []; let cur = '', inQ = false;
   for (let i = 0; i < line.length; i++) {
@@ -261,6 +264,7 @@ function generatePlan(meta, groups, selectedNames) {
 
   sheet.getRange(firstDataRow + TOP_OFFSET, 1, rows.length, 1).setFontWeight('bold');
   sheet.getRange(firstDataRow + TOP_OFFSET, 2, rows.length, 1).setWrap(true);
+  sheet.insertImage(DriveApp.getFileById(LOGO_FILE_ID).getBlob(), 1, 1);
   sheet.setColumnWidth(2, 420);
   sheet.autoResizeColumns(1, 1);
   sheet.autoResizeColumns(3, 4);
