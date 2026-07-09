@@ -198,7 +198,7 @@ function generatePlan(meta, groups, selectedNames) {
     const consolidated = consolidateUnits(g.units);
     const descLines = consolidated.map(c => (c.n > 1 ? c.n + 'x ' : '1x ') + c.desc);
     return {
-      name: g.name, description: descLines.join('\n'),
+      name: g.name, description: descLines.join('\n\n'),
       totalImp, totalBud, start: starts[0] || '', end: ends[ends.length - 1] || '',
     };
   });
@@ -210,7 +210,7 @@ function generatePlan(meta, groups, selectedNames) {
   const sheet = ss.insertSheet(tabName);
 
   const values = [];
-  values.push(['Date', meta.date || '', '', '', 'Partner', '']);
+  values.push(['Date', '', meta.date || '', '', 'Partner', '']);
   values.push(['', '', '', 'Partner Name:', meta.partnerName || '', '']);
   values.push(['Advertiser', '', '', 'Seller Name:', meta.sellerName || '', '']);
   values.push(['Agency Name:', meta.agency || '', '', 'Email Address:', meta.email || '', '']);
@@ -246,19 +246,22 @@ function generatePlan(meta, groups, selectedNames) {
   sheet.getRange(firstDataRow + TOP_OFFSET, 6, lastDataRow - firstDataRow + 1, 1).setNumberFormat('$#,##0.00');
   sheet.getRange(totalRowIdx + TOP_OFFSET, 6, 1, 1).setNumberFormat('$#,##0.00');
 
-  sheet.getRange(headerRowIdx + TOP_OFFSET, 1, 1, 6).setFontWeight('bold').setBackground('#F59ED8').setFontColor('#ffffff');
+  sheet.getRange(headerRowIdx + TOP_OFFSET, 1, 1, 6).setFontWeight('bold').setBackground('#F59ED8').setFontColor('#4B1528');
   sheet.getRange(totalRowIdx + TOP_OFFSET, 1, 1, 6).setFontWeight('bold').setBackground('#f7f7f7');
 
-  // Info-block labels (Date, Advertiser/Partner, Agency Name:, etc.) get the
-  // same pink-background/white-text treatment as the table header, so they
-  // read as a matching label style rather than plain text. (+TOP_OFFSET rows.)
-  sheet.getRangeList(['A7', 'E7', 'A9', 'D8', 'A10', 'D9', 'A11', 'D10'])
+  // Only the three section headers (Date, Advertiser, Partner) get the pink
+  // background — individual field labels (Agency Name:, Partner Name:, etc.)
+  // stay plain, matching the reference template. (+TOP_OFFSET rows.)
+  sheet.getRangeList(['A7', 'C7', 'E7', 'A9'])
     .setBackground('#F59ED8')
-    .setFontColor('#ffffff')
+    .setFontColor('#4B1528')
     .setFontWeight('bold');
 
-  // Advertiser and Partner section headers additionally get merged across
-  // two columns and underlined, matching the reference template's style.
+  // Date, Advertiser, and Partner section headers get merged across two
+  // columns and underlined, matching the reference template's style. Date's
+  // label and value are two separate boxes, same as Advertiser/Partner.
+  sheet.getRange(1 + TOP_OFFSET, 1, 1, 2).merge().setFontLine('underline');
+  sheet.getRange(1 + TOP_OFFSET, 3, 1, 2).merge().setFontLine('underline');
   sheet.getRange(3 + TOP_OFFSET, 1, 1, 2).merge().setFontLine('underline');
   sheet.getRange(1 + TOP_OFFSET, 5, 1, 2).merge().setFontLine('underline');
 
